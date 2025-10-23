@@ -1,0 +1,188 @@
+<html lang="en"><head>
+    <meta charset="utf-8">
+    <title>نقشه JSON ایران</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="http://d3js.org/topojson.v0.min.js"></script>
+    <script src="http://rud.is/passheat/assets/js/jquery.js"></script>
+    <script src="http://twitter.github.com/bootstrap/assets/js/bootstrap-carousel.js"></script>
+    <!-- Le styles -->
+    <link href="bootstrap.css" rel="stylesheet">
+    <link rel="stylesheet" href="http://ifont.ir/apicode/38">
+    <style type="text/css">
+      body {
+        padding-top: 20px;
+        padding-bottom: 40px;
+      }
+
+    div{ 
+        font-family:'B yekan',tahoma;
+        font-size:14px;
+    }
+    .font{ 
+        font-family:'B yekan',tahoma;
+        font-size:14px;
+    }
+
+      /* Custom container */
+      .container-narrow {
+        margin: 0 auto;
+        max-width: 900px;
+      }
+      .container-narrow > hr {
+        margin: 30px 0;
+      }
+
+      /* Main marketing message and sign up button */
+      .jumbotron {
+        margin: 20px 0;
+        text-align: center;
+      }
+      .jumbotron h1 {
+        font-size: 72px;
+        line-height: 1;
+      }
+      .jumbotron .btn {
+        font-size: 18px;
+        padding: 5px 20px;
+      }
+
+      /* Supporting marketing content */
+      .marketing {
+        margin: 60px 0;
+      }
+      .marketing p + h4 {
+        margin-top: 28px;
+      }
+
+.background {
+  fill: none;
+  /*fill: rgb(239, 237, 245);*/
+  stroke: black;
+  stroke-width: 3.5px;
+  pointer-events: all;
+}
+ 
+#states{
+  fill: rgb(188, 189, 220);
+  stroke: #fff;
+  stroke-width: 1.25px;
+  opacity: 0.85;
+}
+ 
+#states .active {
+  /*fill: lightblue;*/
+  fill: rgb(117, 107, 177);
+}
+
+text {
+  stroke-width: 0;
+  opacity: 1;
+  fill: black;
+  font-weight:bold;
+}
+ 
+path:hover {
+  fill: rgb(117, 207, 177);
+}
+
+    </style>
+    <link href="http://twitter.github.com/bootstrap/assets/css/bootstrap-responsive.css" rel="stylesheet">
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://twitter.github.com/bootstrap/assets/js/html5shiv.js"></script>
+    <![endif]-->
+
+    <!-- Fav and touch icons -->
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="http://twitter.github.com/bootstrap/assets/ico/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="http://twitter.github.com/bootstrap/assets/ico/apple-touch-icon-114-precomposed.png">
+      <link rel="apple-touch-icon-precomposed" sizes="72x72" href="http://twitter.github.com/bootstrap/assets/ico/apple-touch-icon-72-precomposed.png">
+                    <link rel="apple-touch-icon-precomposed" href="http://twitter.github.com/bootstrap/assets/ico/apple-touch-icon-57-precomposed.png">
+                                   <link rel="shortcut icon" href="http://twitter.github.com/bootstrap/assets/ico/favicon.png">
+
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-38583306-1']);
+  _gaq.push(['_trackPageview']);
+
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+
+</script>
+</head>
+
+  <body>
+<a href="https://github.com/nasir5959"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_orange_ff7600.png" alt="Fork me on GitHub"></a>
+
+    <div class="container-narrow" style="direction:rtl">
+
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li>
+		<a href="https://twitter.com/share" class="twitter-share-button" data-via="n4Cr" data-lang="fa">توییت</a>
+		<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+          </li>
+        </ul>
+        <h3 class="muted" style="text-align:left">Iran GeoJSON</h3>
+      </div>
+
+      <hr>
+      <div class="jumbotron">
+        <h2>نقشه JSON ایران</h2>
+        <p class="lead">GeoJSON ایران شامل اطلاعات جغرافیاییِ ایران در فرمت JSON است. به کمک آن می‌توان نواحی مختلف را بر روی نقشه‌های پویای وب نمایش داد و اطلاعات آماری را با کتابخانه‌هایی چون <a href="http://d3js.org/">D3.js</a> نمایش داد. </p>
+      </div>
+	<div class="jumbotron">
+	<a href="iran_geo.json" class="btn btn-small btn-success"><i class="icon-download"></i>Geo JSON</a>
+	<a href="iran_topo.json" class="btn btn-small btn-warning"><i class="icon-download"></i>TOPO JSON</a>
+	<a href="https://github.com/nasir5959/iran-geojson" class="btn btn-small">Github Project</a>
+	</div>
+
+<div id="myCarousel" class="carousel" data-interval="false" style="direction:ltr">
+  <!-- Carousel items -->
+  <div class="carousel-inner">
+    <div class="active item">
+        <iframe src="population.html" width="1000" height="700"></iframe>
+    </div>
+    <div class="item">
+        <iframe src="iran2.html" width="1000" height="700"></iframe>
+    </div>
+  </div>
+  <!-- Carousel nav -->
+  <a class="carousel-control left" href="#myCarousel" data-slide="prev">&lsaquo;</a>
+  <a class="carousel-control right" href="#myCarousel" data-slide="next">&rsaquo;</a>
+</div>
+
+
+
+      <div class="row-fluid marketing">
+        <div class="span12" style="text-alight:right">
+          <p> نقشه بالا توسط کتابخانه قدرتمندِ <a href="http://d3js.org/">D3.js</a> و اطلاعات نقشه iran-geojson ساخته شده است. برای مشاهده کد، سورس این صفحه را در گیت‌هاب ببینید. </p>
+        </div>
+
+      </div>
+
+      <hr>
+
+      <div class="footer">
+        <div class="span2">
+<iframe src="http://ghbtns.com/github-btn.html?user=nasir5959&type=follow"
+  allowtransparency="true" frameborder="0" scrolling="0" width="132" height="20"></iframe>
+	</div>
+        <div class="span2">
+            <a href="https://twitter.com/n4Cr" class="twitter-follow-button" data-show-count="false" data-lang="fa">دنبال کردن @n4Cr</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
+	</div>
+
+      </div>
+
+    </div> <!-- /container -->
+
+
+</body></html>

@@ -1,0 +1,149 @@
+<html>
+  <head>
+    <title>D3 Test</title>
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="http://d3js.org/topojson.v0.min.js"></script>
+    <script src="http://rud.is/passheat/assets/js/jquery.js"></script>
+    <style type="text/css">
+.background {
+  fill: none;
+  /*fill: rgb(239, 237, 245);*/
+  stroke: black;
+  stroke-width: 3.5px;
+  pointer-events: all;
+}
+ 
+#states{
+  fill: rgb(188, 189, 220);
+  stroke: #fff;
+  stroke-width: 1.25px;
+  opacity: 0.85;
+}
+ 
+#states .active {
+  /*fill: lightblue;*/
+  fill: rgb(117, 107, 177);
+}
+
+text {
+  stroke-width: 0;
+  opacity: 1;
+  fill: black;
+  font-weight:bold;
+}
+ 
+path:hover {
+  fill: rgb(117, 207, 177);
+}
+.maplab {
+}
+    </style>
+  </head>
+<body>
+  <div>
+  </div>
+
+<div id="map">
+</div>
+  
+  <script type="text/javascript">
+var width = 960,
+    height = 700,
+    centered;
+
+var projection = d3.geo.albers();
+var path = d3.geo.path().projection(projection);
+
+
+var svg = d3.select("#map").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var g = svg.append("g")
+    .attr("transform", "translate(0,0)")
+  .append("g")
+    .attr("id", "states");
+
+d3.json("iran_topo.json", function(error, iran) {
+console.log(iran);
+    var subunits = topojson.object(iran, iran.objects.iran);
+
+    var projection = d3.geo.mercator()
+    .center([51, 35])
+        .scale(2000)
+        .translate([width / 3, height / 3]);
+
+    var path = d3.geo.path()
+        .projection(projection);
+
+/*
+	var ostan = g.selectAll(".ostan")
+		     .data(topojson.object(iran, iran.objects.iran).geometries)
+		   .enter().append("g")
+		     .attr("class","ostan")
+*/
+
+	g.selectAll("path")
+      .data(topojson.object(iran, iran.objects.iran).geometries)
+    .enter().append("path")
+      .attr("d", path)
+
+
+    g.selectAll("text")
+    .data(topojson.object(iran, iran.objects.iran).geometries)
+    .enter()
+    .append("svg:text")
+    .text(function(d){
+        return d.id;
+    })
+    .attr("class", "maplab")
+    .attr("x", function(d){
+        return path.centroid(d)[0];
+    })
+    .attr("y", function(d){
+        return  path.centroid(d)[1];
+    })
+    .attr("text-anchor","middle")
+    .attr('font-size','6pt');
+
+//      .on("click", click);
+
+/*
+	svg.selectAll(".subunit")
+	    .data(topojson.object(iran, iran.objects.iran).geometries)
+	  .enter().append("path")
+	    .attr("class", "subunit")
+	    .attr("d", path)
+	    .on("click", click);
+*/
+
+});
+function click(d) {
+  var x = 0,
+      y = 0,
+      k = 1;
+
+  if (d && centered !== d) {
+    var centroid = path.centroid(d);
+    x = -400//-centroid[0];
+    y = -340//-centroid[1];
+    console.log(centroid);
+    console.log(y);
+    k = 4;
+    centered = d;
+  } else {
+    centered = null;
+  }
+
+  g.selectAll(".subunit")
+      .classed("active", centered && function(d) { return d === centered; });
+
+  g.transition()
+      .duration(1000)
+      .attr("transform", "scale(" + k + ")translate(" + x + "," + y + ")")
+      .style("stroke-width", 1.5 / k + "px");
+}
+  </script>
+
+</body>
+</html>  
