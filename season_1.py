@@ -235,7 +235,7 @@ ax.grid(True, alpha=0.3, linestyle='--', linewidth=1)
 ax.set_axisbelow(True)
 
 # Legend
-ax.legend(fontsize=14, loc='upper right')
+ax.legend(fontsize=14, loc='right')
 
 # تیک‌ها - تبدیل اعداد محورها به فارسی
 x_ticks = ax.get_xticks()

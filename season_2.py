@@ -1,6 +1,6 @@
 """
 فصل دوم: تحلیل عملکرد مشمولین
-تولید نمودارهای تحلیلی برای فصل دوم گزارش
+تولید نمودارهای تحلیلی برای فصل دوم گزارش - نسخه اصلاح شده
 """
 
 import pandas as pd
@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib import font_manager
-from matplotlib.patches import Rectangle, FancyBboxPatch, Circle
+from matplotlib.patches import Rectangle, FancyBboxPatch
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
@@ -18,10 +18,18 @@ import arabic_reshaper
 from bidi.algorithm import get_display
 
 # ==============================================================================
-# Font Configuration
+# Font Configuration - Vazirmatn
 # ==============================================================================
 
-plt.rcParams['font.family'] = 'DejaVu Sans'
+# تلاش برای استفاده از فونت Vazirmatn
+try:
+    vazir_font = font_manager.FontProperties(family='Vazirmatn')
+    plt.rcParams['font.family'] = 'Vazirmatn'
+    print("✓ Using Vazirmatn font")
+except:
+    plt.rcParams['font.family'] = 'DejaVu Sans'
+    print("⚠ Vazirmatn not found, using DejaVu Sans")
+
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['figure.autolayout'] = True
 
@@ -38,8 +46,41 @@ def fix_persian_text(text):
         bidi_text = get_display(reshaped_text)
         return bidi_text
     except Exception as e:
-        print(f"Warning: Could not reshape text '{text}': {e}")
         return str(text)
+
+def format_text_multiline(text, max_chars_per_line=20, max_lines=2):
+    """تقسیم متن به چند خط با محدودیت تعداد کاراکتر"""
+    if not text or pd.isna(text):
+        return ''
+    
+    text = str(text).strip()
+    words = text.split()
+    lines = []
+    current_line = []
+    current_length = 0
+    
+    for word in words:
+        word_length = len(word)
+        if current_length + word_length + len(current_line) <= max_chars_per_line:
+            current_line.append(word)
+            current_length += word_length
+        else:
+            if current_line:
+                lines.append(' '.join(current_line))
+                if len(lines) >= max_lines:
+                    break
+            current_line = [word]
+            current_length = word_length
+    
+    if current_line and len(lines) < max_lines:
+        lines.append(' '.join(current_line))
+    
+    # اگر متن بیشتر از حد مجاز بود، سه نقطه اضافه کن
+    if len(words) > sum(len(line.split()) for line in lines):
+        if lines:
+            lines[-1] = lines[-1][:max_chars_per_line-3] + '...'
+    
+    return '\n'.join(lines)
 
 def convert_to_persian_number(number):
     """تبدیل اعداد انگلیسی به فارسی"""
@@ -85,7 +126,7 @@ subjects_summary = df_contracts.groupby('نام مشمول').agg({
     'اعتبار سال 1404': 'first',
     'دستگاه اجرایی مرتبط': 'first',
     'مجموع مبالغ قراردادها': 'sum',
-    'دانشگاه': 'count'  # تعداد قراردادها
+    'دانشگاه': 'count'
 }).reset_index()
 
 subjects_summary.columns = ['نام مشمول', 'اعتبار', 'دستگاه', 'مبلغ قرارداد', 'تعداد قرارداد']
@@ -96,7 +137,6 @@ payments_summary = df_payments.groupby('نام مشمول').agg({
 }).reset_index()
 payments_summary.columns = ['نام مشمول', 'مبلغ پرداخت']
 
-# ادغام داده‌ها
 subjects_summary = subjects_summary.merge(payments_summary, on='نام مشمول', how='left')
 subjects_summary['مبلغ پرداخت'].fillna(0, inplace=True)
 
@@ -109,52 +149,54 @@ subjects_summary['درصد پرداخت از قرارداد'] = np.where(
     0
 )
 
-# تعداد دانشگاه‌های همکار
-uni_count = df_contracts.groupby('نام مشمول')['دانشگاه'].nunique().reset_index()
-uni_count.columns = ['نام مشمول', 'تعداد دانشگاه']
-subjects_summary = subjects_summary.merge(uni_count, on='نام مشمول', how='left')
+# تجمیع به تفکیک دستگاه
+dept_summary = subjects_summary.groupby('دستگاه').agg({
+    'اعتبار': 'sum',
+    'مبلغ قرارداد': 'sum',
+    'مبلغ پرداخت': 'sum',
+    'نام مشمول': 'count'
+}).reset_index()
+dept_summary.columns = ['دستگاه', 'اعتبار', 'مبلغ قرارداد', 'مبلغ پرداخت', 'تعداد مشمول']
 
 print(f"\nTotal subjects: {len(subjects_summary)}")
 print(f"Subjects with contracts: {len(subjects_summary[subjects_summary['مبلغ قرارداد'] > 0])}")
 print(f"Subjects with payments: {len(subjects_summary[subjects_summary['مبلغ پرداخت'] > 0])}")
 
 # ==============================================================================
-# نمودار 2-1: Treemap - توزیع اعتبارات تکلیفی
+# نمودار 2-1: Treemap - توزیع اعتبارات مشمولین (با متن دو خطی)
 # ==============================================================================
-print("\nGenerating Chart 2-1: Treemap...")
+print("\nGenerating Chart 2-1: Treemap - Subjects...")
 
 import squarify
 
 fig, ax = plt.subplots(figsize=(20, 12))
 
-# مرتب‌سازی و انتخاب 30 مشمول برتر
+# 30 مشمول برتر
 top_30 = subjects_summary.nlargest(30, 'اعتبار')
 
-# محاسبه اندازه‌ها
-sizes = top_30['اعتبار'].values / 1000  # به میلیارد
-labels = [fix_persian_text(f"{name[:40]}...\n{format_number_with_separator(val/1000)} میلیارد") 
-          for name, val in zip(top_30['نام مشمول'], top_30['اعتبار'])]
+sizes = top_30['اعتبار'].values / 1000
+labels = []
+for name, val in zip(top_30['نام مشمول'], top_30['اعتبار']):
+    name_formatted = format_text_multiline(name, max_chars_per_line=25, max_lines=2)
+    value_text = format_number_with_separator(val/1000) + ' میلیارد'
+    labels.append(fix_persian_text(name_formatted + '\n' + value_text))
 
-# رنگ‌بندی بر اساس درصد قرارداد
 colors = plt.cm.RdYlGn(top_30['درصد قرارداد'] / 100)
 
-# رسم treemap
 squarify.plot(sizes=sizes, label=labels, alpha=0.8, color=colors,
-              text_kwargs={'fontsize': 11, 'weight': 'bold'},  # سایز فونت برچسب‌های treemap
+              text_kwargs={'fontsize': 10, 'weight': 'bold'},
               ax=ax, pad=True)
 
 ax.axis('off')
 
-# عنوان
-title_text = fix_persian_text('توزیع اعتبارات تکلیفی بین ۳۰ مشمول برتر (میلیارد ریال)')
-plt.title(title_text, fontsize=24, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-1
+title_text = fix_persian_text('توزیع اعتبارات تکلیفی - ۳۰ مشمول برتر (میلیارد ریال)')
+plt.title(title_text, fontsize=24, fontweight='bold', pad=20)
 
-# Colorbar
 sm = plt.cm.ScalarMappable(cmap='RdYlGn', norm=plt.Normalize(vmin=0, vmax=100))
 sm.set_array([])
 cbar = plt.colorbar(sm, ax=ax, orientation='horizontal', pad=0.02, aspect=50)
-cbar.set_label(fix_persian_text('درصد تحقق قرارداد (%)'), fontsize=14, weight='bold')  # سایز فونت برچسب colorbar
-cbar.ax.tick_params(labelsize=12)  # سایز اعداد colorbar
+cbar.set_label(fix_persian_text('درصد تحقق قرارداد (%)'), fontsize=14, weight='bold')
+cbar.ax.tick_params(labelsize=12)
 
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_1.png', dpi=400, bbox_inches='tight', facecolor='white')
@@ -164,62 +206,116 @@ plt.close()
 print(f"✓ Chart 2-1 saved")
 
 # ==============================================================================
-# نمودار 2-2: Scatter Plot - رابطه اعتبار و قرارداد
+# نمودار 2-1b: Treemap - توزیع اعتبارات دستگاه‌ها
 # ==============================================================================
-print("\nGenerating Chart 2-2: Scatter Plot...")
+print("\nGenerating Chart 2-1b: Treemap - Departments...")
 
-fig, ax = plt.subplots(figsize=(18, 12))
+fig, ax = plt.subplots(figsize=(20, 12))
 
-# داده‌ها بر حسب میلیارد
-x = subjects_summary['اعتبار'] / 1000
-y = subjects_summary['مبلغ قرارداد'] / 1000
-colors_scatter = subjects_summary['درصد قرارداد']
-sizes_scatter = subjects_summary['تعداد دانشگاه'] * 100 + 100
+# همه دستگاه‌ها
+dept_sorted = dept_summary.sort_values('اعتبار', ascending=False)
 
-# رسم scatter
-scatter = ax.scatter(x, y, c=colors_scatter, s=sizes_scatter, 
-                     alpha=0.6, cmap='RdYlGn', edgecolors='black', linewidth=1.5)
+sizes_dept = dept_sorted['اعتبار'].values / 1000
+labels_dept = []
+for name, val in zip(dept_sorted['دستگاه'], dept_sorted['اعتبار']):
+    name_formatted = format_text_multiline(name, max_chars_per_line=30, max_lines=2)
+    value_text = format_number_with_separator(val/1000) + ' میلیارد'
+    labels_dept.append(fix_persian_text(name_formatted + '\n' + value_text))
 
-# خط هدف 30%
-x_line = np.linspace(0, x.max(), 100)
-y_line = x_line * 0.30
-ax.plot(x_line, y_line, 'r--', linewidth=3, alpha=0.7, 
-        label=fix_persian_text('خط هدف ۳۰٪'))
+dept_sorted['درصد قرارداد'] = (dept_sorted['مبلغ قرارداد'] / dept_sorted['اعتبار']) * 100
+colors_dept = plt.cm.RdYlGn(dept_sorted['درصد قرارداد'] / 100)
 
-# برچسب‌گذاری مشمولین برتر
-top_10_credits = subjects_summary.nlargest(10, 'اعتبار')
-for _, row in top_10_credits.iterrows():
-    if row['مبلغ قرارداد'] > 0:
-        ax.annotate(fix_persian_text(row['نام مشمول'][:25]),
-                   xy=(row['اعتبار']/1000, row['مبلغ قرارداد']/1000),
-                   xytext=(10, 10), textcoords='offset points',
-                   fontsize=9, alpha=0.7,  # سایز فونت برچسب‌های نقاط
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.3))
+squarify.plot(sizes=sizes_dept, label=labels_dept, alpha=0.8, color=colors_dept,
+              text_kwargs={'fontsize': 11, 'weight': 'bold'},
+              ax=ax, pad=True)
 
-# تنظیمات محورها
-ax.set_xlabel(fix_persian_text('اعتبار تکلیفی (میلیارد ریال)'), 
-              fontsize=16, fontweight='bold')  # سایز فونت برچسب محور X
-ax.set_ylabel(fix_persian_text('مبلغ قراردادها (میلیارد ریال)'), 
-              fontsize=16, fontweight='bold')  # سایز فونت برچسب محور Y
-ax.set_title(fix_persian_text('رابطه بین اعتبار تکلیفی و مبلغ قراردادهای منعقد شده'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-2
+ax.axis('off')
 
-# Grid
-ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
-ax.set_axisbelow(True)
+title_text = fix_persian_text('توزیع اعتبارات تکلیفی به تفکیک دستگاه اجرایی (میلیارد ریال)')
+plt.title(title_text, fontsize=24, fontweight='bold', pad=20)
 
-# Colorbar
-cbar = plt.colorbar(scatter, ax=ax)
-cbar.set_label(fix_persian_text('درصد تحقق قرارداد (%)'), 
-               fontsize=14, weight='bold')  # سایز فونت برچسب colorbar
-cbar.ax.tick_params(labelsize=12)  # سایز اعداد colorbar
+sm = plt.cm.ScalarMappable(cmap='RdYlGn', norm=plt.Normalize(vmin=0, vmax=100))
+sm.set_array([])
+cbar = plt.colorbar(sm, ax=ax, orientation='horizontal', pad=0.02, aspect=50)
+cbar.set_label(fix_persian_text('درصد تحقق قرارداد (%)'), fontsize=14, weight='bold')
+cbar.ax.tick_params(labelsize=12)
 
-# Legend
-ax.legend(fontsize=14, loc='upper left')  # سایز فونت legend
+plt.tight_layout()
+plt.savefig(output_dir / 'chart_2_1b.png', dpi=400, bbox_inches='tight', facecolor='white')
+plt.savefig(output_dir / 'chart_2_1b.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
+plt.close()
 
-# محورها
-ax.tick_params(axis='both', labelsize=12)  # سایز اعداد محورها
+print(f"✓ Chart 2-1b saved")
 
+# ==============================================================================
+# نمودار 2-2: تعداد و فراوانی قراردادها
+# ==============================================================================
+print("\nGenerating Chart 2-2: Contract Statistics...")
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 9))
+
+# بخش اول: تعداد مشمولین با قرارداد
+subjects_with_contract = len(subjects_summary[subjects_summary['مبلغ قرارداد'] > 0])
+subjects_without_contract = len(subjects_summary[subjects_summary['مبلغ قرارداد'] == 0])
+
+categories = [
+    fix_persian_text('مشمولین با قرارداد'),
+    fix_persian_text('مشمولین بدون قرارداد')
+]
+values = [subjects_with_contract, subjects_without_contract]
+colors_pie = ['#4CAF50', '#F44336']
+
+wedges, texts, autotexts = ax1.pie(values, labels=categories, autopct='%1.1f%%',
+                                     colors=colors_pie, startangle=90,
+                                     textprops={'fontsize': 13, 'weight': 'bold'})
+
+for autotext in autotexts:
+    autotext.set_color('white')
+    autotext.set_fontsize(16)
+    autotext.set_fontweight('bold')
+
+ax1.set_title(fix_persian_text('توزیع مشمولین بر اساس انعقاد قرارداد'), 
+              fontsize=18, fontweight='bold', pad=15)
+
+# افزودن تعداد
+textstr = fix_persian_text(
+    f'با قرارداد: {subjects_with_contract} مشمول\n'
+    f'بدون قرارداد: {subjects_without_contract} مشمول\n'
+    f'جمع: {subjects_with_contract + subjects_without_contract} مشمول'
+)
+ax1.text(0, -1.4, textstr, ha='center', fontsize=12,
+         bbox=dict(boxstyle='round,pad=0.8', facecolor='wheat', alpha=0.8))
+
+# بخش دوم: هیستوگرام مبالغ قراردادها
+contracts_values = subjects_summary[subjects_summary['مبلغ قرارداد'] > 0]['مبلغ قرارداد'] / 1000
+
+n, bins, patches = ax2.hist(contracts_values, bins=15, color='#2196F3',
+                             alpha=0.7, edgecolor='black', linewidth=1.5)
+
+colors_hist = plt.cm.YlGnBu(n / n.max())
+for patch, color in zip(patches, colors_hist):
+    patch.set_facecolor(color)
+
+mean_val = contracts_values.mean()
+median_val = contracts_values.median()
+
+ax2.axvline(mean_val, color='red', linestyle='--', linewidth=2,
+           label=fix_persian_text(f'میانگین: {format_number_with_separator(mean_val)} میلیارد'))
+ax2.axvline(median_val, color='green', linestyle='--', linewidth=2,
+           label=fix_persian_text(f'میانه: {format_number_with_separator(median_val)} میلیارد'))
+
+ax2.set_xlabel(fix_persian_text('مبلغ قرارداد (میلیارد ریال)'), fontsize=15, fontweight='bold')
+ax2.set_ylabel(fix_persian_text('تعداد مشمولین (فراوانی)'), fontsize=15, fontweight='bold')
+ax2.set_title(fix_persian_text('توزیع فراوانی مبالغ قراردادهای منعقد شده'), 
+              fontsize=18, fontweight='bold', pad=15)
+ax2.legend(fontsize=12)
+ax2.grid(True, alpha=0.3)
+ax2.tick_params(labelsize=12)
+
+plt.suptitle(fix_persian_text('آمار قراردادهای منعقد شده - شش ماهه اول ۱۴۰۴'),
+             fontsize=22, fontweight='bold', y=0.98)
+
+fig.patch.set_facecolor('white')
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_2.png', dpi=400, bbox_inches='tight', facecolor='white')
 plt.savefig(output_dir / 'chart_2_2.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
@@ -228,57 +324,44 @@ plt.close()
 print(f"✓ Chart 2-2 saved")
 
 # ==============================================================================
-# نمودار 2-3: Horizontal Bar - درصد تحقق قرارداد (20 برتر)
+# نمودار 2-3: درصد تحقق قرارداد - 20 مشمول برتر
 # ==============================================================================
-print("\nGenerating Chart 2-3: Horizontal Bar...")
+print("\nGenerating Chart 2-3: Contract Achievement - Top 20...")
 
 fig, ax = plt.subplots(figsize=(16, 14))
 
-# انتخاب 20 مشمول با بالاترین اعتبار
 top_20 = subjects_summary.nlargest(20, 'اعتبار').sort_values('درصد قرارداد', ascending=True)
 
 y_pos = np.arange(len(top_20))
 percentages = top_20['درصد قرارداد'].values
 
-# رنگ‌بندی
 colors_bar = ['#D32F2F' if p < 10 else '#FF9800' if p < 20 else '#4CAF50' 
               for p in percentages]
 
-# رسم نمودار
 bars = ax.barh(y_pos, percentages, color=colors_bar, alpha=0.8, edgecolor='black', linewidth=1.5)
 
-# خط هدف 30%
 ax.axvline(x=30, color='red', linestyle='--', linewidth=3, alpha=0.7,
           label=fix_persian_text('هدف ۳۰٪'))
 
-# برچسب‌ها
-labels = [fix_persian_text(name[:40]) for name in top_20['نام مشمول']]
+labels = [fix_persian_text(format_text_multiline(name, 35, 2)) for name in top_20['نام مشمول']]
 ax.set_yticks(y_pos)
-ax.set_yticklabels(labels, fontsize=12)  # سایز فونت نام مشمولین
+ax.set_yticklabels(labels, fontsize=11)
 
-# نمایش درصد روی میله‌ها
-for i, (bar, pct, credit) in enumerate(zip(bars, percentages, top_20['اعتبار']/1000)):
+for i, (bar, pct) in enumerate(zip(bars, percentages)):
     width = bar.get_width()
     label_text = fix_persian_text(f'{pct:.1f}%')
     ax.text(width + 1, bar.get_y() + bar.get_height()/2,
            label_text, ha='left', va='center', 
-           fontsize=11, fontweight='bold')  # سایز فونت درصدها روی میله‌ها
+           fontsize=11, fontweight='bold')
 
-# تنظیمات
-ax.set_xlabel(fix_persian_text('درصد تحقق قرارداد (%)'), 
-              fontsize=16, fontweight='bold')  # سایز فونت برچسب محور X
+ax.set_xlabel(fix_persian_text('درصد تحقق قرارداد (%)'), fontsize=16, fontweight='bold')
 ax.set_title(fix_persian_text('درصد تحقق قرارداد - ۲۰ مشمول برتر از نظر اعتبار'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-3
+             fontsize=22, fontweight='bold', pad=20)
 ax.set_xlim(0, max(percentages) + 10)
-
-# Grid
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
-
-# Legend
-ax.legend(fontsize=14, loc='lower right')  # سایز فونت legend
-
-ax.tick_params(axis='x', labelsize=12)  # سایز اعداد محور X
+ax.legend(fontsize=14, loc='lower right')
+ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_3.png', dpi=400, bbox_inches='tight', facecolor='white')
@@ -288,53 +371,46 @@ plt.close()
 print(f"✓ Chart 2-3 saved")
 
 # ==============================================================================
-# نمودار 2-4: Heatmap - تعداد قراردادها (مشمول × دانشگاه)
+# نمودار 2-4: درصد تحقق پرداخت - 20 مشمول دارای قرارداد
 # ==============================================================================
-print("\nGenerating Chart 2-4: Heatmap...")
+print("\nGenerating Chart 2-4: Payment Achievement - Top 20 with contracts...")
 
-# ایجاد ماتریس تعداد قراردادها
-contract_matrix = df_contracts.groupby(['نام مشمول', 'دانشگاه']).size().reset_index(name='تعداد')
+fig, ax = plt.subplots(figsize=(16, 14))
 
-# انتخاب 15 مشمول و 15 دانشگاه برتر
-top_subjects = subjects_summary.nlargest(15, 'اعتبار')['نام مشمول'].values
-top_unis = df_contracts.groupby('دانشگاه').size().nlargest(15).index.values
+# انتخاب مشمولینی که قرارداد دارند
+subjects_with_contracts = subjects_summary[subjects_summary['مبلغ قرارداد'] > 0]
+top_20_contracts = subjects_with_contracts.nlargest(20, 'مبلغ قرارداد').sort_values('درصد پرداخت از قرارداد', ascending=True)
 
-contract_matrix_filtered = contract_matrix[
-    (contract_matrix['نام مشمول'].isin(top_subjects)) & 
-    (contract_matrix['دانشگاه'].isin(top_unis))
-]
+y_pos = np.arange(len(top_20_contracts))
+percentages = top_20_contracts['درصد پرداخت از قرارداد'].values
 
-# Pivot
-pivot_matrix = contract_matrix_filtered.pivot(
-    index='نام مشمول', 
-    columns='دانشگاه', 
-    values='تعداد'
-).fillna(0)
+colors_bar = ['#D32F2F' if p < 50 else '#FF9800' if p < 67 else '#4CAF50' 
+              for p in percentages]
 
-fig, ax = plt.subplots(figsize=(20, 12))
+bars = ax.barh(y_pos, percentages, color=colors_bar, alpha=0.8, edgecolor='black', linewidth=1.5)
 
-# رسم heatmap
-sns.heatmap(pivot_matrix, annot=True, fmt='.0f', cmap='YlOrRd', 
-            linewidths=0.5, cbar_kws={'label': fix_persian_text('تعداد قرارداد')},
-            ax=ax, annot_kws={'fontsize': 10})  # سایز فونت اعداد داخل heatmap
+ax.axvline(x=67, color='red', linestyle='--', linewidth=3, alpha=0.7,
+          label=fix_persian_text('هدف ۶۷٪'))
 
-# تنظیمات
-ax.set_xlabel(fix_persian_text('دانشگاه'), fontsize=16, fontweight='bold')  # سایز فونت برچسب محور X
-ax.set_ylabel(fix_persian_text('مشمول'), fontsize=16, fontweight='bold')  # سایز فونت برچسب محور Y
-ax.set_title(fix_persian_text('ماتریس تعداد قراردادها - ۱۵ مشمول برتر × ۱۵ دانشگاه برتر'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-4
+labels = [fix_persian_text(format_text_multiline(name, 35, 2)) for name in top_20_contracts['نام مشمول']]
+ax.set_yticks(y_pos)
+ax.set_yticklabels(labels, fontsize=11)
 
-# برچسب‌ها
-ax.set_xticklabels([fix_persian_text(str(label.get_text())[:30]) 
-                    for label in ax.get_xticklabels()], 
-                   rotation=45, ha='right', fontsize=11)  # سایز فونت نام دانشگاه‌ها
-ax.set_yticklabels([fix_persian_text(str(label.get_text())[:40]) 
-                    for label in ax.get_yticklabels()], 
-                   rotation=0, fontsize=11)  # سایز فونت نام مشمولین
+for i, (bar, pct) in enumerate(zip(bars, percentages)):
+    width = bar.get_width()
+    label_text = fix_persian_text(f'{pct:.1f}%')
+    ax.text(width + 2, bar.get_y() + bar.get_height()/2,
+           label_text, ha='left', va='center', 
+           fontsize=11, fontweight='bold')
 
-# Colorbar
-cbar = ax.collections[0].colorbar
-cbar.ax.tick_params(labelsize=12)  # سایز اعداد colorbar
+ax.set_xlabel(fix_persian_text('درصد پرداخت از قرارداد (%)'), fontsize=16, fontweight='bold')
+ax.set_title(fix_persian_text('درصد تحقق پرداخت - ۲۰ مشمول دارای بیشترین قرارداد'), 
+             fontsize=22, fontweight='bold', pad=20)
+ax.set_xlim(0, min(max(percentages) + 10, 110))
+ax.grid(True, axis='x', alpha=0.3, linestyle='--')
+ax.set_axisbelow(True)
+ax.legend(fontsize=14, loc='lower right')
+ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_4.png', dpi=400, bbox_inches='tight', facecolor='white')
@@ -344,84 +420,53 @@ plt.close()
 print(f"✓ Chart 2-4 saved")
 
 # ==============================================================================
-# نمودار 2-5: Waterfall - مقایسه اعتبار، قرارداد، پرداخت
+# نمودار 2-5: 10 مشمول برتر - اعتبار و قرارداد
 # ==============================================================================
-print("\nGenerating Chart 2-5: Waterfall...")
+print("\nGenerating Chart 2-5: Top 10 - Credit vs Contract...")
 
-fig, ax = plt.subplots(figsize=(18, 10))
+fig, ax = plt.subplots(figsize=(16, 12))
 
-# محاسبه مقادیر کل
-total_credit = subjects_summary['اعتبار'].sum() / 1000
-total_contract = subjects_summary['مبلغ قرارداد'].sum() / 1000
-total_payment = subjects_summary['مبلغ پرداخت'].sum() / 1000
+top_10 = subjects_summary.nlargest(10, 'اعتبار').sort_values('اعتبار', ascending=True)
 
-# داده‌های waterfall
-categories = [
-    fix_persian_text('اعتبار تکلیفی'),
-    fix_persian_text('کاهش: بدون قرارداد'),
-    fix_persian_text('قراردادهای منعقد شده'),
-    fix_persian_text('کاهش: بدون پرداخت'),
-    fix_persian_text('پرداخت‌های انجام شده')
-]
+y_pos = np.arange(len(top_10))
+credits = top_10['اعتبار'].values / 1000
+contracts = top_10['مبلغ قرارداد'].values / 1000
 
-values = [
-    total_credit,
-    -(total_credit - total_contract),
-    total_contract,
-    -(total_contract - total_payment),
-    total_payment
-]
+# ستون اعتبار
+bars1 = ax.barh(y_pos, credits, height=0.35, label=fix_persian_text('اعتبار تکلیفی'),
+                color='#2196F3', alpha=0.8, edgecolor='black', linewidth=1.5)
 
-# محاسبه موقعیت‌ها
-positions = [0, 0, 0, 0, 0]
-positions[0] = 0
-positions[1] = positions[0] + values[0]
-positions[2] = positions[1] + values[1]
-positions[3] = positions[2] + values[2]
-positions[4] = positions[3] + values[3]
-
-heights = [values[0], values[1], values[2], values[3], values[4]]
-bottoms = [0, positions[0], positions[1], positions[2], positions[3]]
-
-colors_waterfall = ['#2196F3', '#F44336', '#4CAF50', '#FF9800', '#9C27B0']
-
-# رسم میله‌ها
-bars = ax.bar(range(len(categories)), 
-              [abs(h) for h in heights], 
-              bottom=bottoms,
-              color=colors_waterfall, 
-              alpha=0.8, 
-              edgecolor='black', 
-              linewidth=2)
-
-# خطوط اتصال
-for i in range(len(categories)-1):
-    if i in [0, 2]:  # خطوط افقی
-        y = bottoms[i+1]
-        ax.plot([i+0.4, i+1-0.4], [y, y], 'k--', linewidth=2, alpha=0.5)
+# ستون قرارداد
+bars2 = ax.barh(y_pos, contracts, height=0.35, label=fix_persian_text('مبلغ قرارداد'),
+                color='#4CAF50', alpha=0.9, edgecolor='black', linewidth=1.5)
 
 # برچسب‌ها
-for i, (bar, val) in enumerate(zip(bars, heights)):
-    height = bar.get_height()
-    label_text = format_number_with_separator(abs(val))
-    ax.text(bar.get_x() + bar.get_width()/2, 
-           bar.get_y() + height/2,
-           label_text, 
-           ha='center', va='center',
-           fontsize=14, fontweight='bold', color='white',  # سایز فونت اعداد روی میله‌ها
-           bbox=dict(boxstyle='round,pad=0.5', facecolor='black', alpha=0.3))
+labels = [fix_persian_text(format_text_multiline(name, 40, 2)) for name in top_10['نام مشمول']]
+ax.set_yticks(y_pos)
+ax.set_yticklabels(labels, fontsize=12)
 
-# تنظیمات
-ax.set_xticks(range(len(categories)))
-ax.set_xticklabels(categories, fontsize=14, fontweight='bold')  # سایز فونت برچسب‌های محور X
-ax.set_ylabel(fix_persian_text('مبلغ (میلیارد ریال)'), 
-              fontsize=16, fontweight='bold')  # سایز فونت برچسب محور Y
-ax.set_title(fix_persian_text('جریان اعتبارات: از تخصیص تا پرداخت (آبشاری)'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-5
+# مقادیر روی میله‌ها
+for bar, val in zip(bars1, credits):
+    if val > 50:
+        ax.text(val/2, bar.get_y() + bar.get_height()/2,
+               format_number_with_separator(val),
+               ha='center', va='center', fontsize=10, 
+               fontweight='bold', color='white')
 
-ax.grid(True, axis='y', alpha=0.3, linestyle='--')
+for bar, val in zip(bars2, contracts):
+    if val > 10:
+        ax.text(val/2, bar.get_y() + bar.get_height()/2,
+               format_number_with_separator(val),
+               ha='center', va='center', fontsize=10,
+               fontweight='bold', color='white')
+
+ax.set_xlabel(fix_persian_text('مبلغ (میلیارد ریال)'), fontsize=16, fontweight='bold')
+ax.set_title(fix_persian_text('مقایسه اعتبار و قرارداد - ۱۰ مشمول دارای بیشترین اعتبار'), 
+             fontsize=22, fontweight='bold', pad=20)
+ax.legend(fontsize=14, loc='lower right')
+ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
-ax.tick_params(axis='y', labelsize=12)  # سایز اعداد محور Y
+ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_5.png', dpi=400, bbox_inches='tight', facecolor='white')
@@ -431,58 +476,39 @@ plt.close()
 print(f"✓ Chart 2-5 saved")
 
 # ==============================================================================
-# نمودار 2-6: Bullet Chart - پیشرفت پرداخت (15 برتر)
+# نمودار 2-6: 20 مشمول برتر در پرداخت
 # ==============================================================================
-print("\nGenerating Chart 2-6: Bullet Chart...")
+print("\nGenerating Chart 2-6: Top 20 - Payments...")
 
 fig, ax = plt.subplots(figsize=(16, 14))
 
-# انتخاب 15 مشمول برتر
-top_15 = subjects_summary.nlargest(15, 'اعتبار').sort_values('درصد پرداخت از قرارداد', ascending=True)
+top_20_payments = subjects_summary.nlargest(20, 'مبلغ پرداخت').sort_values('مبلغ پرداخت', ascending=True)
 
-y_pos = np.arange(len(top_15))
+y_pos = np.arange(len(top_20_payments))
+payments = top_20_payments['مبلغ پرداخت'].values / 1000
 
-# رسم پس‌زمینه (هدف)
-ax.barh(y_pos, [100]*len(top_15), height=0.6, 
-        color='#E0E0E0', alpha=0.5, label=fix_persian_text('سقف ۱۰۰٪'))
+colors_gradient = plt.cm.Greens(np.linspace(0.4, 0.9, len(payments)))
 
-# رسم قرارداد
-contract_pct = (top_15['مبلغ قرارداد'] / top_15['اعتبار'] * 100).values
-ax.barh(y_pos, contract_pct, height=0.5, 
-        color='#2196F3', alpha=0.7, label=fix_persian_text('درصد قرارداد'))
+bars = ax.barh(y_pos, payments, color=colors_gradient, alpha=0.8, 
+              edgecolor='black', linewidth=1.5)
 
-# رسم پرداخت
-payment_pct = top_15['درصد پرداخت از قرارداد'].values
-bars_payment = ax.barh(y_pos, payment_pct, height=0.3, 
-                       color='#4CAF50', alpha=0.9, label=fix_persian_text('درصد پرداخت از قرارداد'))
-
-# خط هدف
-ax.axvline(x=67, color='red', linestyle='--', linewidth=3, alpha=0.7,
-          label=fix_persian_text('هدف ۶۷٪'))
-
-# برچسب‌ها
-labels = [fix_persian_text(name[:35]) for name in top_15['نام مشمول']]
+labels = [fix_persian_text(format_text_multiline(name, 40, 2)) for name in top_20_payments['نام مشمول']]
 ax.set_yticks(y_pos)
-ax.set_yticklabels(labels, fontsize=11)  # سایز فونت نام مشمولین
+ax.set_yticklabels(labels, fontsize=11)
 
-# نمایش درصد
-for i, (bar, pct) in enumerate(zip(bars_payment, payment_pct)):
-    if pct > 5:
-        label_text = fix_persian_text(f'{pct:.1f}%')
-        ax.text(pct/2, bar.get_y() + bar.get_height()/2,
-               label_text, ha='center', va='center',
-               fontsize=10, fontweight='bold', color='white')  # سایز فونت درصدها داخل میله
+for bar, val in zip(bars, payments):
+    label_text = format_number_with_separator(val) + ' ' + fix_persian_text('میلیارد')
+    ax.text(val + max(payments)*0.02, bar.get_y() + bar.get_height()/2,
+           label_text, ha='left', va='center',
+           fontsize=10, fontweight='bold')
 
-# تنظیمات
-ax.set_xlabel(fix_persian_text('درصد (%)'), fontsize=16, fontweight='bold')  # سایز فونت برچسب محور X
-ax.set_title(fix_persian_text('پیشرفت پرداخت نسبت به قرارداد - ۱۵ مشمول برتر'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-6
-ax.set_xlim(0, 110)
-
+ax.set_xlabel(fix_persian_text('مبلغ پرداخت (میلیارد ریال)'), fontsize=16, fontweight='bold')
+ax.set_title(fix_persian_text('۲۰ مشمول دارای بیشترین پرداخت - شش ماهه اول ۱۴۰۴'), 
+             fontsize=22, fontweight='bold', pad=20)
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
-ax.legend(fontsize=12, loc='lower right')  # سایز فونت legend
-ax.tick_params(axis='x', labelsize=12)  # سایز اعداد محور X
+ax.tick_params(axis='x', labelsize=12)
+ax.set_xlim(0, max(payments) * 1.15)
 
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_6.png', dpi=400, bbox_inches='tight', facecolor='white')
@@ -492,65 +518,71 @@ plt.close()
 print(f"✓ Chart 2-6 saved")
 
 # ==============================================================================
-# نمودار 2-7: Funnel - قیف تبدیل
+# نمودار 2-7: نمودار پارتو - تمرکز پرداخت‌ها
 # ==============================================================================
-print("\nGenerating Chart 2-7: Funnel...")
+print("\nGenerating Chart 2-7: Pareto - Payment Concentration...")
 
-fig, ax = plt.subplots(figsize=(14, 10))
+# مرتب‌سازی بر اساس پرداخت
+payments_sorted = subjects_summary.sort_values('مبلغ پرداخت', ascending=False).reset_index(drop=True)
+payments_sorted = payments_sorted[payments_sorted['مبلغ پرداخت'] > 0]
 
-# محاسبه مراحل قیف
-stages = [
-    fix_persian_text('اعتبارات تکلیفی'),
-    fix_persian_text('قراردادهای منعقد شده'),
-    fix_persian_text('پرداخت‌های انجام شده')
-]
+cumulative_pct = (payments_sorted['مبلغ پرداخت'].cumsum() / payments_sorted['مبلغ پرداخت'].sum()) * 100
+subject_pct = (np.arange(1, len(payments_sorted) + 1) / len(payments_sorted)) * 100
 
-values_funnel = [
-    total_credit,
-    total_contract,
-    total_payment
-]
+fig, ax1 = plt.subplots(figsize=(18, 10))
 
-percentages_funnel = [100, (total_contract/total_credit)*100, (total_payment/total_credit)*100]
+# ستون‌ها
+color1 = '#4CAF50'
+ax1.bar(range(len(payments_sorted)), payments_sorted['مبلغ پرداخت']/1000,
+       color=color1, alpha=0.7, edgecolor='black', linewidth=0.5)
+ax1.set_xlabel(fix_persian_text('رتبه مشمولین (از بالاترین به پایین‌ترین پرداخت)'),
+              fontsize=18, fontweight='bold')
+ax1.set_ylabel(fix_persian_text('مبلغ پرداخت (میلیارد ریال)'),
+              fontsize=18, fontweight='bold', color=color1)
+ax1.tick_params(axis='y', labelcolor=color1, labelsize=14)
+ax1.tick_params(axis='x', labelsize=14)
 
-colors_funnel = ['#2196F3', '#4CAF50', '#FF9800']
+# خط تجمعی
+ax2 = ax1.twinx()
+color2 = '#D32F2F'
+ax2.plot(range(len(cumulative_pct)), cumulative_pct,
+        color=color2, linewidth=4, marker='o', markersize=3)
+ax2.set_ylabel(fix_persian_text('درصد تجمعی پرداخت‌ها (%)'),
+              fontsize=18, fontweight='bold', color=color2)
+ax2.tick_params(axis='y', labelcolor=color2, labelsize=14)
+ax2.set_ylim(0, 105)
 
-# رسم قیف
-y_pos_funnel = np.arange(len(stages))
-widths = [p/100 * 2 for p in percentages_funnel]
+# خطوط راهنما
+index_20 = int(len(payments_sorted) * 0.2)
+payment_at_20 = cumulative_pct.iloc[index_20] if index_20 < len(cumulative_pct) else 0
 
-for i, (stage, width, color, value, pct) in enumerate(zip(stages, widths, colors_funnel, values_funnel, percentages_funnel)):
-    # مستطیل
-    left = 1 - width/2
-    rect = plt.Rectangle((left, i-0.3), width, 0.6, 
-                         facecolor=color, edgecolor='black', linewidth=2, alpha=0.8)
-    ax.add_patch(rect)
-    
-    # متن مرحله
-    ax.text(1, i, stage, 
-           ha='center', va='center', fontsize=16, fontweight='bold',  # سایز فونت نام مراحل
-           bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='black', linewidth=2))
-    
-    # مقدار و درصد
-    value_text = format_number_with_separator(value) + '\n' + \
-                 fix_persian_text(f'میلیارد ریال') + '\n' + \
-                 fix_persian_text(f'({pct:.1f}%)')
-    ax.text(1, i-0.6, value_text,
-           ha='center', va='top', fontsize=13, fontweight='bold')  # سایز فونت مقادیر
+ax1.axvline(x=index_20, color='green', linestyle='--', linewidth=2, alpha=0.7)
+ax1.text(index_20, ax1.get_ylim()[1]*0.9,
+        fix_persian_text(f'۲۰٪ مشمولین برتر\n({format_number_with_separator(payment_at_20)}٪ پرداخت)'),
+        fontsize=12, fontweight='bold', ha='center',
+        bbox=dict(boxstyle='round,pad=0.5', facecolor='yellow', alpha=0.7))
 
-# خطوط اتصال
-for i in range(len(stages)-1):
-    ax.plot([1, 1], [i+0.3, i+0.7], 'k--', linewidth=2, alpha=0.5)
+ax2.axhline(y=80, color='purple', linestyle='--', linewidth=2, alpha=0.7)
 
-# تنظیمات
-ax.set_xlim(0, 2)
-ax.set_ylim(-1, len(stages))
-ax.axis('off')
+# آمار
+top_10_pct = (payments_sorted.head(10)['مبلغ پرداخت'].sum() / payments_sorted['مبلغ پرداخت'].sum()) * 100
+top_20_pct = (payments_sorted.head(int(len(payments_sorted)*0.2))['مبلغ پرداخت'].sum() / 
+              payments_sorted['مبلغ پرداخت'].sum()) * 100
 
-title_text = fix_persian_text('قیف تبدیل اعتبارات در سامانه ساتع')
-ax.text(1, len(stages)+0.3, title_text,
-       ha='center', va='bottom', fontsize=24, fontweight='bold')  # سایز فونت عنوان نمودار 2-7
+textstr = fix_persian_text(
+    f'۱۰ مشمول برتر: {format_number_with_separator(top_10_pct)}٪ از کل پرداخت\n'
+    f'۲۰٪ مشمولین برتر: {format_number_with_separator(top_20_pct)}٪ از کل پرداخت\n'
+    f'تعداد مشمولین با پرداخت: {len(payments_sorted)}'
+)
+props = dict(boxstyle='round,pad=1', facecolor='wheat', alpha=0.9, edgecolor='black', linewidth=2)
+ax1.text(0.02, 0.98, textstr, transform=ax1.transAxes, fontsize=13,
+        verticalalignment='top', horizontalalignment='left', bbox=props)
 
+title_text = fix_persian_text('نمودار پارتو: تمرکز پرداخت‌ها - حجم پرداخت در تعداد محدودی از مشمولین متمرکز است')
+ax1.set_title(title_text, fontsize=22, fontweight='bold', pad=20)
+
+ax1.grid(True, alpha=0.3)
+ax1.set_axisbelow(True)
 fig.patch.set_facecolor('white')
 
 plt.tight_layout()
@@ -561,72 +593,60 @@ plt.close()
 print(f"✓ Chart 2-7 saved")
 
 # ==============================================================================
-# تحلیل به تفکیک دستگاه‌های اجرایی
+# نمودار 2-8: Pie Charts - توزیع سلسله‌مراتبی (اصلاح شده)
 # ==============================================================================
+print("\nGenerating Chart 2-8: Pie Charts - Hierarchical Distribution...")
 
-# تجمیع به تفکیک دستگاه
-dept_summary = subjects_summary.groupby('دستگاه').agg({
-    'اعتبار': 'sum',
-    'مبلغ قرارداد': 'sum',
-    'مبلغ پرداخت': 'sum',
-    'نام مشمول': 'count'
-}).reset_index()
-
-dept_summary.columns = ['دستگاه', 'اعتبار', 'مبلغ قرارداد', 'مبلغ پرداخت', 'تعداد مشمول']
-
-dept_summary['درصد قرارداد'] = (dept_summary['مبلغ قرارداد'] / dept_summary['اعتبار']) * 100
-dept_summary['درصد پرداخت'] = (dept_summary['مبلغ پرداخت'] / dept_summary['اعتبار']) * 100
-dept_summary['درصد پرداخت از قرارداد'] = np.where(
-    dept_summary['مبلغ قرارداد'] > 0,
-    (dept_summary['مبلغ پرداخت'] / dept_summary['مبلغ قرارداد']) * 100,
-    0
-)
-
-# ==============================================================================
-# نمودار 2-8: Sunburst - توزیع سلسله‌مراتبی
-# ==============================================================================
-print("\nGenerating Chart 2-8: Sunburst...")
-
-# این نمودار با plotly بهتر است، اما برای matplotlib از pie استفاده می‌کنیم
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
 
-# Pie 1: دستگاه‌های اجرایی
-dept_top = dept_summary.nlargest(10, 'اعتبار')
-sizes_dept = dept_top['اعتبار'].values / 1000
-labels_dept = [fix_persian_text(f"{d[:20]}\n{format_number_with_separator(s)} میلیارد") 
-               for d, s in zip(dept_top['دستگاه'], sizes_dept)]
+# Pie 1: دستگاه‌های اجرایی - 5 برتر + سایر
+dept_top_5 = dept_summary.nlargest(5, 'اعتبار')
+dept_others = dept_summary.nsmallest(len(dept_summary) - 5, 'اعتبار')
+
+sizes_dept = list(dept_top_5['اعتبار'].values / 1000)
+sizes_dept.append(dept_others['اعتبار'].sum() / 1000)
+
+labels_dept = [fix_persian_text(f"{format_text_multiline(d, 20, 2)}\n{format_number_with_separator(s)} میلیارد")
+              for d, s in zip(dept_top_5['دستگاه'], sizes_dept[:-1])]
+labels_dept.append(fix_persian_text(f"سایر\n{format_number_with_separator(sizes_dept[-1])} میلیارد"))
 
 wedges1, texts1, autotexts1 = ax1.pie(sizes_dept, labels=labels_dept, autopct='%1.1f%%',
-                                        startangle=90, textprops={'fontsize': 11})  # سایز فونت برچسب‌های pie
+                                        startangle=90, textprops={'fontsize': 11})
 
 for autotext in autotexts1:
     autotext.set_color('white')
-    autotext.set_fontsize(12)  # سایز فونت درصدها داخل pie
+    autotext.set_fontsize(12)
     autotext.set_fontweight('bold')
 
-ax1.set_title(fix_persian_text('توزیع اعتبارات به تفکیک دستگاه اجرایی'), 
-              fontsize=18, fontweight='bold', pad=20)  # سایز فونت عنوان pie اول
+ax1.set_title(fix_persian_text('توزیع اعتبارات - ۵ دستگاه برتر + سایر'),
+             fontsize=18, fontweight='bold', pad=20)
 
-# Pie 2: مشمولین برتر
-subjects_top = subjects_summary.nlargest(15, 'اعتبار')
-sizes_subj = subjects_top['اعتبار'].values / 1000
-labels_subj = [fix_persian_text(f"{s[:15]}\n{format_number_with_separator(sz)} میلیارد") 
-               for s, sz in zip(subjects_top['نام مشمول'], sizes_subj)]
+# Pie 2: مشمولین - 10 برتر + سایر
+subjects_top_10 = subjects_summary.nlargest(10, 'اعتبار')
+subjects_others = subjects_summary.nsmallest(len(subjects_summary) - 10, 'اعتبار')
+
+sizes_subj = list(subjects_top_10['اعتبار'].values / 1000)
+sizes_subj.append(subjects_others['اعتبار'].sum() / 1000)
+
+labels_subj = [fix_persian_text(f"{format_text_multiline(s, 15, 2)}\n{format_number_with_separator(sz)} میلیارد")
+              for s, sz in zip(subjects_top_10['نام مشمول'], sizes_subj[:-1])]
+labels_subj.append(fix_persian_text(f"سایر ({len(subjects_others)} مشمول)\n{format_number_with_separator(sizes_subj[-1])} میلیارد"))
 
 wedges2, texts2, autotexts2 = ax2.pie(sizes_subj, labels=labels_subj, autopct='%1.1f%%',
-                                        startangle=90, textprops={'fontsize': 10})  # سایز فونت برچسب‌های pie
+                                        startangle=90, textprops={'fontsize': 10})
 
 for autotext in autotexts2:
     autotext.set_color('white')
-    autotext.set_fontsize(11)  # سایز فونت درصدها داخل pie
+    autotext.set_fontsize(11)
     autotext.set_fontweight('bold')
 
-ax2.set_title(fix_persian_text('توزیع اعتبارات - ۱۵ مشمول برتر'), 
-              fontsize=18, fontweight='bold', pad=20)  # سایز فونت عنوان pie دوم
+ax2.set_title(fix_persian_text('توزیع اعتبارات - ۱۰ مشمول برتر + سایر'),
+             fontsize=18, fontweight='bold', pad=20)
 
-plt.suptitle(fix_persian_text('توزیع سلسله‌مراتبی اعتبارات'), 
-             fontsize=24, fontweight='bold', y=0.98)  # سایز فونت عنوان اصلی نمودار 2-8
+plt.suptitle(fix_persian_text('توزیع سلسله‌مراتبی اعتبارات تکلیفی'),
+            fontsize=24, fontweight='bold', y=0.98)
 
+fig.patch.set_facecolor('white')
 plt.tight_layout()
 plt.savefig(output_dir / 'chart_2_8.png', dpi=400, bbox_inches='tight', facecolor='white')
 plt.savefig(output_dir / 'chart_2_8.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
@@ -635,200 +655,19 @@ plt.close()
 print(f"✓ Chart 2-8 saved")
 
 # ==============================================================================
-# نمودار 2-9: Radar Chart - مقایسه دستگاه‌ها
-# ==============================================================================
-print("\nGenerating Chart 2-9: Radar Chart...")
-
-from math import pi
-
-fig, ax = plt.subplots(figsize=(14, 14), subplot_kw=dict(projection='polar'))
-
-# انتخاب 6 دستگاه برتر
-top_6_depts = dept_summary.nlargest(6, 'اعتبار')
-
-# معیارها
-categories = [
-    fix_persian_text('درصد قرارداد'),
-    fix_persian_text('درصد پرداخت'),
-    fix_persian_text('پرداخت از قرارداد'),
-    fix_persian_text('تعداد مشمول'),
-    fix_persian_text('تنوع دانشگاه')
-]
-
-# نرمال‌سازی تعداد مشمول و تنوع دانشگاه به درصد
-dept_uni_diversity = []
-for _, dept_row in top_6_depts.iterrows():
-    dept_unis = df_contracts[df_contracts['دستگاه اجرایی مرتبط'] == dept_row['دستگاه']]['دانشگاه'].nunique()
-    dept_uni_diversity.append(dept_unis)
-
-max_subject = top_6_depts['تعداد مشمول'].max()
-max_uni = max(dept_uni_diversity)
-
-# رسم برای هر دستگاه
-angles = [n / float(len(categories)) * 2 * pi for n in range(len(categories))]
-angles += angles[:1]
-
-colors_radar = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#F44336', '#00BCD4']
-
-for i, (_, row) in enumerate(top_6_depts.iterrows()):
-    values = [
-        row['درصد قرارداد'],
-        row['درصد پرداخت'],
-        row['درصد پرداخت از قرارداد'],
-        (row['تعداد مشمول'] / max_subject) * 100,
-        (dept_uni_diversity[i] / max_uni) * 100
-    ]
-    values += values[:1]
-    
-    ax.plot(angles, values, 'o-', linewidth=2, color=colors_radar[i], 
-           label=fix_persian_text(row['دستگاه'][:25]))
-    ax.fill(angles, values, alpha=0.15, color=colors_radar[i])
-
-# تنظیمات
-ax.set_xticks(angles[:-1])
-ax.set_xticklabels(categories, fontsize=13, fontweight='bold')  # سایز فونت برچسب‌های محورها
-ax.set_ylim(0, 100)
-ax.set_yticks([20, 40, 60, 80, 100])
-ax.set_yticklabels(['۲۰', '۴۰', '۶۰', '۸۰', '۱۰۰'], fontsize=11)  # سایز فونت اعداد شعاعی
-ax.grid(True, linestyle='--', alpha=0.7)
-
-ax.set_title(fix_persian_text('مقایسه چند بعدی دستگاه‌های اجرایی'), 
-             fontsize=22, fontweight='bold', pad=30, y=1.08)  # سایز فونت عنوان نمودار 2-9
-
-ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12)  # سایز فونت legend
-
-plt.tight_layout()
-plt.savefig(output_dir / 'chart_2_9.png', dpi=400, bbox_inches='tight', facecolor='white')
-plt.savefig(output_dir / 'chart_2_9.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
-plt.close()
-
-print(f"✓ Chart 2-9 saved")
-
-# ==============================================================================
-# نمودار 2-10: Grouped Bar - مقایسه اعتبار، قرارداد، پرداخت (دستگاه‌ها)
-# ==============================================================================
-print("\nGenerating Chart 2-10: Grouped Bar...")
-
-fig, ax = plt.subplots(figsize=(18, 10))
-
-# انتخاب 10 دستگاه برتر
-top_10_depts = dept_summary.nlargest(10, 'اعتبار').sort_values('اعتبار', ascending=True)
-
-y_pos_grouped = np.arange(len(top_10_depts))
-bar_height = 0.25
-
-# رسم میله‌ها
-bars1 = ax.barh(y_pos_grouped - bar_height, top_10_depts['اعتبار']/1000, 
-                bar_height, label=fix_persian_text('اعتبار تکلیفی'), 
-                color='#2196F3', alpha=0.8, edgecolor='black', linewidth=1)
-
-bars2 = ax.barh(y_pos_grouped, top_10_depts['مبلغ قرارداد']/1000, 
-                bar_height, label=fix_persian_text('مبلغ قراردادها'), 
-                color='#4CAF50', alpha=0.8, edgecolor='black', linewidth=1)
-
-bars3 = ax.barh(y_pos_grouped + bar_height, top_10_depts['مبلغ پرداخت']/1000, 
-                bar_height, label=fix_persian_text('مبلغ پرداخت‌ها'), 
-                color='#FF9800', alpha=0.8, edgecolor='black', linewidth=1)
-
-# برچسب‌ها
-labels_grouped = [fix_persian_text(d[:40]) for d in top_10_depts['دستگاه']]
-ax.set_yticks(y_pos_grouped)
-ax.set_yticklabels(labels_grouped, fontsize=12)  # سایز فونت نام دستگاه‌ها
-
-# تنظیمات
-ax.set_xlabel(fix_persian_text('مبلغ (میلیارد ریال)'), fontsize=16, fontweight='bold')  # سایز فونت برچسب محور X
-ax.set_title(fix_persian_text('مقایسه اعتبار، قرارداد و پرداخت به تفکیک دستگاه اجرایی'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-10
-
-ax.grid(True, axis='x', alpha=0.3, linestyle='--')
-ax.set_axisbelow(True)
-ax.legend(fontsize=14, loc='lower right')  # سایز فونت legend
-ax.tick_params(axis='x', labelsize=12)  # سایز اعداد محور X
-
-plt.tight_layout()
-plt.savefig(output_dir / 'chart_2_10.png', dpi=400, bbox_inches='tight', facecolor='white')
-plt.savefig(output_dir / 'chart_2_10.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
-plt.close()
-
-print(f"✓ Chart 2-10 saved")
-
-# ==============================================================================
-# نمودار 2-11: Box Plot - توزیع نرخ‌ها
-# ==============================================================================
-print("\nGenerating Chart 2-11: Box Plot...")
-
-fig, ax = plt.subplots(figsize=(14, 10))
-
-# داده‌ها
-data_box = [
-    subjects_summary['درصد قرارداد'].dropna(),
-    subjects_summary['درصد پرداخت از اعتبار'].dropna(),
-    subjects_summary['درصد پرداخت از قرارداد'].dropna()
-]
-
-labels_box = [
-    fix_persian_text('نرخ تحقق\nقرارداد'),
-    fix_persian_text('نرخ پرداخت\nاز اعتبار'),
-    fix_persian_text('نرخ پرداخت\nاز قرارداد')
-]
-
-# رسم box plot
-bp = ax.boxplot(data_box, labels=labels_box, patch_artist=True,
-                notch=True, showmeans=True,
-                boxprops=dict(facecolor='lightblue', alpha=0.7, linewidth=2),
-                whiskerprops=dict(linewidth=2),
-                capprops=dict(linewidth=2),
-                medianprops=dict(color='red', linewidth=3),
-                meanprops=dict(marker='D', markerfacecolor='green', markersize=8))
-
-# رنگ‌آمیزی
-colors_box = ['#2196F3', '#4CAF50', '#FF9800']
-for patch, color in zip(bp['boxes'], colors_box):
-    patch.set_facecolor(color)
-    patch.set_alpha(0.6)
-
-# خطوط هدف
-ax.axhline(y=30, color='red', linestyle='--', linewidth=2, alpha=0.7,
-          label=fix_persian_text('هدف قرارداد: ۳۰٪'))
-ax.axhline(y=20, color='orange', linestyle='--', linewidth=2, alpha=0.7,
-          label=fix_persian_text('هدف پرداخت: ۲۰٪'))
-ax.axhline(y=67, color='purple', linestyle='--', linewidth=2, alpha=0.7,
-          label=fix_persian_text('هدف پرداخت از قرارداد: ۶۷٪'))
-
-# تنظیمات
-ax.set_ylabel(fix_persian_text('درصد (%)'), fontsize=16, fontweight='bold')  # سایز فونت برچسب محور Y
-ax.set_title(fix_persian_text('توزیع نرخ تحقق و پرداخت در بین مشمولین'), 
-             fontsize=22, fontweight='bold', pad=20)  # سایز فونت عنوان نمودار 2-11
-ax.set_ylim(-5, 105)
-
-ax.grid(True, axis='y', alpha=0.3, linestyle='--')
-ax.set_axisbelow(True)
-ax.legend(fontsize=12, loc='upper right')  # سایز فونت legend
-ax.tick_params(axis='both', labelsize=13)  # سایز فونت برچسب‌ها و اعداد
-
-plt.tight_layout()
-plt.savefig(output_dir / 'chart_2_11.png', dpi=400, bbox_inches='tight', facecolor='white')
-plt.savefig(output_dir / 'chart_2_11.jpg', dpi=400, bbox_inches='tight', facecolor='white', pil_kwargs={'quality': 95})
-plt.close()
-
-print(f"✓ Chart 2-11 saved")
-
-# ==============================================================================
 # Summary
 # ==============================================================================
 print("\n" + "="*70)
-print("CHAPTER 2 VISUALIZATION COMPLETE")
+print("CHAPTER 2 VISUALIZATION COMPLETE - REVISED VERSION")
 print("="*70)
-print(f"\nGenerated {11} charts in: {output_dir}")
-print(f"  Chart 2-1:  Treemap - توزیع اعتبارات")
-print(f"  Chart 2-2:  Scatter - رابطه اعتبار و قرارداد")
-print(f"  Chart 2-3:  Horizontal Bar - درصد تحقق قرارداد")
-print(f"  Chart 2-4:  Heatmap - ماتریس قراردادها")
-print(f"  Chart 2-5:  Waterfall - جریان اعتبارات")
-print(f"  Chart 2-6:  Bullet - پیشرفت پرداخت")
-print(f"  Chart 2-7:  Funnel - قیف تبدیل")
-print(f"  Chart 2-8:  Sunburst/Pie - توزیع سلسله‌مراتبی")
-print(f"  Chart 2-9:  Radar - مقایسه دستگاه‌ها")
-print(f"  Chart 2-10: Grouped Bar - مقایسه دستگاه‌ها")
-print(f"  Chart 2-11: Box Plot - توزیع نرخ‌ها")
+print(f"\nGenerated 8 charts in: {output_dir}")
+print(f"  Chart 2-1:  Treemap - توزیع اعتبارات مشمولین")
+print(f"  Chart 2-1b: Treemap - توزیع اعتبارات دستگاه‌ها")
+print(f"  Chart 2-2:  آمار قراردادها (Pie + Histogram)")
+print(f"  Chart 2-3:  درصد تحقق قرارداد - 20 برتر")
+print(f"  Chart 2-4:  درصد تحقق پرداخت - 20 با قرارداد")
+print(f"  Chart 2-5:  10 برتر - اعتبار vs قرارداد")
+print(f"  Chart 2-6:  20 برتر - پرداخت‌ها")
+print(f"  Chart 2-7:  پارتو - تمرکز پرداخت‌ها")
+print(f"  Chart 2-8:  Pie - توزیع سلسله‌مراتبی")
 print("\n" + "="*70)
