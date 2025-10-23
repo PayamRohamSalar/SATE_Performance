@@ -20,15 +20,13 @@ from bidi.algorithm import get_display
 # ==============================================================================
 # Font Configuration - Vazirmatn
 # ==============================================================================
-
-# تلاش برای استفاده از فونت Vazirmatn
-try:
-    vazir_font = font_manager.FontProperties(family='Vazirmatn')
+font_path = Path(r"D:\OneDrive\AI-Project\SATE_Performance_1404\fonts\Vazirmatn-Regular.ttf")
+if font_path.exists():
+    font_manager.fontManager.addfont(str(font_path))
     plt.rcParams['font.family'] = 'Vazirmatn'
-    print("✓ Using Vazirmatn font")
-except:
+else:
+    print(f"Warning: Font not found at {font_path}")
     plt.rcParams['font.family'] = 'DejaVu Sans'
-    print("⚠ Vazirmatn not found, using DejaVu Sans")
 
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['figure.autolayout'] = True
@@ -310,6 +308,15 @@ ax2.set_title(fix_persian_text('توزیع فراوانی مبالغ قرارد�
               fontsize=18, fontweight='bold', pad=15)
 ax2.legend(fontsize=12)
 ax2.grid(True, alpha=0.3)
+# تبدیل اعداد محورها به فارسی - نمودار 2-2
+x_ticks = ax2.get_xticks()
+x_labels = [convert_to_persian_number(f'{int(tick):,}') for tick in x_ticks]
+ax2.set_xticklabels(x_labels)
+
+y_ticks = ax2.get_yticks()
+y_labels = [convert_to_persian_number(f'{int(tick)}') for tick in y_ticks]
+ax2.set_yticklabels(y_labels)
+
 ax2.tick_params(labelsize=12)
 
 plt.suptitle(fix_persian_text('آمار قراردادهای منعقد شده - شش ماهه اول ۱۴۰۴'),
@@ -361,6 +368,11 @@ ax.set_xlim(0, max(percentages) + 10)
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
 ax.legend(fontsize=14, loc='lower right')
+# تبدیل اعداد محور X به فارسی - نمودار 2-3
+x_ticks = ax.get_xticks()
+x_labels = [convert_to_persian_number(f'{int(tick)}') for tick in x_ticks]
+ax.set_xticklabels(x_labels)
+
 ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
@@ -410,6 +422,11 @@ ax.set_xlim(0, min(max(percentages) + 10, 110))
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
 ax.legend(fontsize=14, loc='lower right')
+# تبدیل اعداد محور X به فارسی - نمودار 2-4
+x_ticks = ax.get_xticks()
+x_labels = [convert_to_persian_number(f'{int(tick)}') for tick in x_ticks]
+ax.set_xticklabels(x_labels)
+
 ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
@@ -466,6 +483,11 @@ ax.set_title(fix_persian_text('مقایسه اعتبار و قرارداد - ۱�
 ax.legend(fontsize=14, loc='lower right')
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
+# تبدیل اعداد محور X به فارسی - نمودار 2-5
+x_ticks = ax.get_xticks()
+x_labels = [convert_to_persian_number(f'{int(tick):,}') for tick in x_ticks]
+ax.set_xticklabels(x_labels)
+
 ax.tick_params(axis='x', labelsize=12)
 
 plt.tight_layout()
@@ -507,6 +529,11 @@ ax.set_title(fix_persian_text('۲۰ مشمول دارای بیشترین پرد�
              fontsize=22, fontweight='bold', pad=20)
 ax.grid(True, axis='x', alpha=0.3, linestyle='--')
 ax.set_axisbelow(True)
+# تبدیل اعداد محور X به فارسی - نمودار 2-6
+x_ticks = ax.get_xticks()
+x_labels = [convert_to_persian_number(f'{int(tick):,}') for tick in x_ticks]
+ax.set_xticklabels(x_labels)
+
 ax.tick_params(axis='x', labelsize=12)
 ax.set_xlim(0, max(payments) * 1.15)
 
@@ -539,6 +566,15 @@ ax1.set_xlabel(fix_persian_text('رتبه مشمولین (از بالاترین 
               fontsize=18, fontweight='bold')
 ax1.set_ylabel(fix_persian_text('مبلغ پرداخت (میلیارد ریال)'),
               fontsize=18, fontweight='bold', color=color1)
+# تبدیل اعداد محورها به فارسی - نمودار 2-7
+y1_ticks = ax1.get_yticks()
+y1_labels = [convert_to_persian_number(f'{int(tick):,}') for tick in y1_ticks]
+ax1.set_yticklabels(y1_labels)
+
+x1_ticks = ax1.get_xticks()
+x1_labels = [convert_to_persian_number(f'{int(tick)}') for tick in x1_ticks]
+ax1.set_xticklabels(x1_labels)
+
 ax1.tick_params(axis='y', labelcolor=color1, labelsize=14)
 ax1.tick_params(axis='x', labelsize=14)
 
@@ -549,6 +585,11 @@ ax2.plot(range(len(cumulative_pct)), cumulative_pct,
         color=color2, linewidth=4, marker='o', markersize=3)
 ax2.set_ylabel(fix_persian_text('درصد تجمعی پرداخت‌ها (%)'),
               fontsize=18, fontweight='bold', color=color2)
+# تبدیل اعداد محور دوم (درصد تجمعی) به فارسی
+y2_ticks = ax2.get_yticks()
+y2_labels = [convert_to_persian_number(f'{int(tick)}') for tick in y2_ticks]
+ax2.set_yticklabels(y2_labels)
+
 ax2.tick_params(axis='y', labelcolor=color2, labelsize=14)
 ax2.set_ylim(0, 105)
 
